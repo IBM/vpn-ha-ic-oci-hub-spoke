@@ -1,9 +1,16 @@
->IBM Legacy Public Repository Disclosure: All content in this repository including code has been provided by IBM under the associated open source software license and IBM is under no obligation to provide enhancements, updates, or support. IBM developers produced this code as an open source project (not as an IBM product), and IBM makes no assertions as to the level of quality nor security, and will not be maintaining this code going forward
+> [!WARNING]
+> IBM Legacy Public Repository Disclosure: All content in this repository including code has been provided by IBM under the associated open source software license and IBM is under no obligation to provide enhancements, updates, or support. IBM developers produced this code as an open source project (not as an IBM product), and IBM makes no assertions as to the level of quality nor security, and will not be maintaining this code going forward
 
 # Introduction
-This repository demonstrates how to connect OCI and IBM Cloud through a VPN in a high-availability (HA) scenario using a hub-and-spoke architecture on the IBM Cloud side, in an Active-Active setup. For each cloud provider, two VPN gateways will be provisioned. On IBM Cloud, one gateway will be deployed per zone. Each VPN gateway is zone-resilient, as it consists of two appliances (Active/Passive) within the zone. Additionally, each VPN gateway can manage multiple tunnels. On OCI, VPN IPsec connections are regional, meaning each tunnel will be deployed in every zone and managed by the appliance in that zone. Consequently, we will configure one policy-based VPN gateway per zone on IBM Cloud, provisioning two tunnels that connect to the two OCI VPN IPsec tunnels deployed in each zone. The Transit Gateway is capable of maintaining traffic within the same zone between spokes and the hub, provided that the same range and prefix per zone are advertised to it via the ingress routing table.
+This repository demonstrates how to connect OCI and IBM Cloud through a VPN in a high-availability (HA) scenario using a hub-and-spoke architecture on the IBM Cloud side, in an Active-Active setup. This way, all our machines in the Spoke VPCs on IBM Cloud will route traffic through a single point to access resources in OCI by sending the traffic to the Hub VPC. This approach prevents each Spoke from being individually responsible for connectivity.
+
+We will also provide a sample Terraform code to facilitate a quick and easy deployment. This example is designed for learning purposes and serves as a helpful introduction to deploying the solution. However, we recommend not using it directly in production environments.
+
+# Proposed architecture. Active-Active
 
 ![alt text](images/main.png)
+
+For each cloud provider, two VPN gateways must be provisioned. On IBM Cloud, one VPN Gateway must be deployed per zone. Each VPN gateway is zone-resilient, as it consists of two appliances (Active/Passive) within the zone. Additionally, each VPN gateway can manage multiple tunnels. On OCI, VPN IPsec connections are regional, meaning each tunnel will be deployed in every zone and managed by the appliance in that zone. Consequently, we will configure one policy-based VPN gateway per zone on IBM Cloud, provisioning two tunnels that connect to the two OCI VPN IPsec tunnels deployed in each zone. The Transit Gateway is capable of maintaining traffic within the same zone between spokes and the hub, provided that the same range and prefix per zone are advertised to it via the ingress routing table.
 
 ### Tunnels
 Four tunnels will be used, with two tunnels per appliance in an active-passive configuration for each VPN Gateway. This is achieved through prefix prioritization
@@ -32,17 +39,51 @@ When all tunnels are up the excepted flows are
 * If **one appliance** goes down, the tunnel which manage goes down. From the IC side VPN Gateway detect it  and update the VPC route table accordingly. Therefore the TGW is updated as well. This situation could cause assymetric traffic. For example, if tunnel 1 goes down, traffic from the spoke in zone 1 may cross to zone 2 because the TGW has advertised a more precise range for zone 2. The returning traffic, however, will flow through zone. This is a supported scenario on IBM Cloud because  VPN Gateway has PSF disables.
 * If **one zone** goes down, we guarantee that at least one appliance fault domain per Site-to-Site VPN remains operational, as it is not possible to specify the fault domains in which the appliances are deployed.
 
-# Infrastructure deployment
-CLI version used
-* Terraform v1.9.7
-* OCI client 3.49.2
+# Alternative architecture. Active-Passive (discarded scenario)
+![alt text](images/active-passive.png)
+This proposal architecture is similar as the active-active solution but only considering 1 tunnel per gateway. Tunnels configuration are:
 
-Add env variables
+VPN Gateway Zone 1
+* tunnel 1. ```10.3.0.0/18, 10.1.0.0/18``` (Active)
+
+VPN Gateway Zone 2
+* tunnel 1. ```10.3.0.0/16, 10.1.0.0/16``` (Passive)
+
+The preferred path is through Zone 1, using VPN Gateway 1, as it has a better prefix. If the IPSec1 appliance on OCI side goes down, the tunnel it manages will also go down. Consequently, the route in the RT Ingress will be removed, and the TGW will advertise to redirect traffic to VPN Gateway 2 in Zone 2.
+
+This scenario functions correctly but presents certain challenges on the OCI side. The reason is that when deploying two Site-to-Site VPNs from OCI, there is no control over which Fault Domain the appliance is placed in. Additionally, there is no way to inform the customer about the exact deployment location of the appliances or to guarantee that the selected appliances for the active and passive tunnels are not placed within the same Fault Domain.
+
+# Terraform - Infrastructure deployment
+> [!WARNING]
+> The following sample Terraform code facilitates a quick and easy initial deployment. However, we recommend not using it directly in production environments, as it is not supported. If you choose to use it, please review and adapt it to fit your specific requirements.
+
+Let's deploy the components described in the previous section. In overall, the following resources will be deployed.
+
+**On IBM Cloud**
+* 1 VPC transit (```10.2.0.0/16```)
+* 1 VPC spoke (```10.3.0.0/16```)
+* 1 TGW
+* 1 Routing table ingress
+* 2 VPN Gateway on IBM Cloud. 1 per zone
+* 1 VSI VPC in each zone on transit VPC
+
+**On OCI**
+* 1 Virtual cloud network (range ```10.1.0.0/16```)
+* 2 Site-to-Site VPN
+* 1 Oracle Linux instance
+* 1 Dynamic routing gateway
+
+Download code from repository
 ```bash
-export IC_REGION=eu-es
+git clone https://github.com/IBM/vpn-ha-ic-oci-hub-spoke
+cd vpn-ha-ic-oci-hub-spoke/terraform
+```
+Add ibmcloud cli environment variables
+```bash
+export IC_REGION=$IBM_REGION
 export IC_API_KEY=$IBM_API_KEY
 ```
-Initialite session on OCI. Select ```30``` to land in ```eu-madrid-1``` region
+Initialite session on OCI
 ```bash
 oci session authenticate
 ```
@@ -150,12 +191,6 @@ OCI VPN GW creates 2 tunnels, each tunnel can be set up with more than one CIDR 
 * **Peer_only** negotiation is needed in IBM VPN gtw side. Then, OCI takes control of IKE negotiation for each SA/CIDR. We realized that setting up like bidirectional creates conflict and only 1 SA is up, the rest of SAs have IKE negotiation issues. There is any impact for production?
 * **PFS** is not supported for this setup, therefore you must disable it in the IPsec policies. It creates conflicts due to the discrepancy of two systems. It has to be disabled in both sides.
 
-# Active Passive scenario (discarded scenario)
-![alt text](images/active-passive.png)
-The preferred path is the zone 1 to use VPN Gateway 1. If the IPSec1 appliance on VPN Gateway 1 goes down, the tunnel managed by it will also go down. As a result, the route in the RT Ingress will disappear, and the TGW will be advertise the use the VPN Gateway 2 in the zone 2.
-
-This scenario works but presents issues on the OCI side. Why? Because when deploying two Site-to-Site VPNs from the OCI side, we cannot control which Fault Domain the appliance is deployed in. There is no way to inform the customer where the appliances are deployed or ensure that the selected appliances for the active and passive tunnels do not end up in the same Fault Domain.
-
 # FAQ's
 ### Does VPN Gateway on IC allow asymmetric traffic?
 Yes
@@ -176,3 +211,11 @@ Yes! VPN Gateway has HA in one zone
 
 ### Can we select which Fault Domains the Site-to-Site VPN in OCI will be deployed in?
 No
+
+### Which was the CLI versions used in this PoC?
+* Terraform v1.9.7
+* OCI client 3.49.2
+
+# References
+* https://cloud.ibm.com/docs/vpc?topic=vpc-vpn-overview
+* https://docs.oracle.com/en-us/iaas/Content/Network/Tasks/overviewIPsec.htm
