@@ -53,11 +53,11 @@ The preferred path is through Zone 1, using VPN Gateway 1, as it has a better pr
 
 This scenario functions correctly but presents certain challenges on the OCI side. The reason is that when deploying two Site-to-Site VPNs from OCI, there is no control over which Fault Domain the appliance is placed in. Additionally, there is no way to inform the customer about the exact deployment location of the appliances or to guarantee that the selected appliances for the active and passive tunnels are not placed within the same Fault Domain.
 
-# Terraform - Infrastructure deployment
+# Terraform - Active-Active deployment 
 > [!WARNING]
 > The following sample Terraform code facilitates a quick and easy initial deployment. However, we recommend not using it directly in production environments, as it is not supported. If you choose to use it, please review and adapt it to fit your specific requirements.
 
-Let's deploy the components described in the previous section. In overall, the following resources will be deployed.
+Let's deploy the components described in the proposed arquitecture section. In overall, the following resources will be deployed.
 
 **On IBM Cloud**
 * 1 VPC transit (```10.2.0.0/16```)
@@ -65,11 +65,13 @@ Let's deploy the components described in the previous section. In overall, the f
 * 1 TGW
 * 1 Routing table ingress
 * 2 VPN Gateway on IBM Cloud. 1 per zone
+    * 2 tunnels per VPN Gateway
 * 1 VSI VPC in each zone on transit VPC
 
 **On OCI**
 * 1 Virtual cloud network (range ```10.1.0.0/16```)
 * 2 Site-to-Site VPN
+    * 1 tunnel per appliance
 * 1 Oracle Linux instance
 * 1 Dynamic routing gateway
 
