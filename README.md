@@ -6,7 +6,7 @@ This repository demonstrates how to connect OCI and IBM Cloud through a VPN in a
 
 We will also provide a sample Terraform code to facilitate a quick and easy deployment. This example is designed for learning purposes and serves as a helpful introduction to deploying the solution. However, we recommend not using it directly in production environments.
 
-We encourage you to visit the following blog where we delve into the technical aspects of the solution **TODO - LINK BLOG**
+We encourage you to visit the following blog where we delve into the technical aspects of the solution [here](https://developer.ibm.com/tutorials/awb-high-availability-vpn-cloud-oci/)
 
 # Proposed architecture. Active-Active
 
@@ -83,4 +83,4 @@ ping 10.1.1.109
 # References
 * https://cloud.ibm.com/docs/vpc?topic=vpc-vpn-overview
 * https://docs.oracle.com/en-us/iaas/Content/Network/Tasks/overviewIPsec.htm
-* **TODO - LINK BLOG**
+* https://developer.ibm.com/tutorials/awb-high-availability-vpn-cloud-oci/
