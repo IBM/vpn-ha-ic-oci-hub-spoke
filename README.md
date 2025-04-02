@@ -83,4 +83,5 @@ ping 10.1.1.109
 # References
 * https://cloud.ibm.com/docs/vpc?topic=vpc-vpn-overview
 * https://docs.oracle.com/en-us/iaas/Content/Network/Tasks/overviewIPsec.htm
-* https://developer.ibm.com/tutorials/awb-high-availability-vpn-cloud-oci/
+* https://developer.ibm.com/tutorials/awb-high-availability-vpn-cloud-oci
+* https://www.ibm.com/think/tutorials/how-to-use-vpn-with-a-vpc-hub-and-spoke-architecture
